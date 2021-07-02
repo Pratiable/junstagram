@@ -6,11 +6,12 @@ from django.http     import JsonResponse
 from django.views    import View
 
 from postings.models       import Post, Image, Comment
-from postings.loginchecker import CheckLogin
+from postings.authorization import Authorize
 from user.models           import User
+from likes.models           import Like
 
 class WritePostView(View):
-    @CheckLogin
+    @Authorize
     def post(self, request):
         try:
             data = json.loads(request.body)
@@ -54,15 +55,18 @@ class AllPostsView(View):
                     'created_at': 
                     timezone.localtime(post.created_at).strftime("%Y-%m-%dT%H:%M:%S"),
                     'images'    : image_list,
+                    'likes'     : len(Like.objects.filter(post=post))
                 }
             )
         return JsonResponse({'Posts': results}, status=200)
 
 class PostsView(View):
+    @Authorize
     def get(self, request, pk):
-        post       = Post.objects.get(pk=pk)
-        images     = post.image_set.all()
-        image_list = [image.url for image in images]
+        post        = Post.objects.get(pk=pk)
+        signed_user = request.user
+        images      = post.image_set.all()
+        image_list  = [image.url for image in images]
         
         comments      = post.comment_set.all()
         comments_list = []
@@ -73,25 +77,39 @@ class PostsView(View):
             'created_at': 
             timezone.localtime(post.created_at).strftime("%Y-%m-%dT%H:%M:%S"),
             'images'    : image_list,
+            'likes'     : len(Like.objects.filter(post_id=pk)),
+            'user_like' : bool(Like.objects.filter(post_id=pk, user=signed_user)),
         }
         for comment in comments:
-            comments_list.append({
+            comments_list.append(
+                {
                 'user'      : comment.user.nickname,
                 'content'   : comment.content,
                 'created_at': 
                 timezone.localtime(post.created_at).strftime("%Y-%m-%dT%H:%M:%S"),
-            })
+                }
+            )
 
         return JsonResponse({'Post': post_view, 'Comments': comments_list}, status=200)
 
+    @Authorize
+    def delete(self, request, pk):
+        signed_user = request.user
+        try:
+            if Post.objects.filter(pk=pk, author=signed_user):
+                Post.objects.get(pk=pk, author=signed_user).delete()
+                return JsonResponse({"MESSAGE":"POST_DELETED"}, status=200)
+            return JsonResponse({"MESSAGE":"YOU_ARE_NOT_AUTHOR"}, status=400)
+        except:
+            return JsonResponse({"MESSAGE":"SOMETHING_IS_WRONG"}, status=400)
 
 class WriteCommentView(View):
-    @CheckLogin
-    def post(self, request, postpk):
+    @Authorize
+    def post(self, request, post_pk):
         try:
-            data = json.loads(request.body)
+            data        = json.loads(request.body)
             signed_user = request.user
-            post = Post.objects.get(pk=postpk)
+            post        = Post.objects.get(pk=post_pk)
 
             comment = Comment.objects.create(
                 user    = signed_user,
@@ -120,8 +138,8 @@ class WriteCommentView(View):
             return JsonResponse({'MESSAGE':'FOREIGN_KEY_ERROR'}, status=400)
 
 class CommentsView(View):
-    def get(self, request, postpk):
-        comments = Comment.objects.filter(post_id=postpk)
+    def get(self, request, post_pk):
+        comments = Comment.objects.filter(post_id=post_pk)
         results  = []
         for comment in comments:
             results.append(
@@ -133,3 +151,14 @@ class CommentsView(View):
                 }
             )
         return JsonResponse({"COMMENTS" : results}, status=200)
+    
+    @Authorize
+    def delete(self, request, post_pk, comment_pk):
+        signed_user = request.user
+        try:
+            if Comment.objects.filter(pk=comment_pk, user=signed_user):
+                Comment.objects.get(pk=comment_pk, user=signed_user).delete()
+                return JsonResponse({"MESSAGE":"COMMENT_DELETED"}, status=200)
+            return JsonResponse({"MESSAGE":"PERMISSION_DENIED"}, status=400)
+        except:
+            return JsonResponse({"MESSAGE":"SOMETHING_IS_WRONG"}, status=400)

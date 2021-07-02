@@ -1,14 +1,13 @@
 from django.db import models
 
 from user.models import User
-from likes.models import Like
 
 class Post(models.Model):
-    author     = models.ForeignKey(User, on_delete=models.CASCADE)
+    author     = models.ForeignKey('user.User', on_delete=models.CASCADE)
     content    = models.CharField(max_length=2000, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    likes      = models.ManyToManyField(User, related_name='users', through='Like')
+    likes      = models.ManyToManyField('user.User', related_name='likes', through='likes.Like')
 
     class Meta:
         db_table = 'posts'
