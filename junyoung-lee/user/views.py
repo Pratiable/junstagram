@@ -7,7 +7,8 @@ from django.views           import View
 from django.utils           import timezone
 
 from my_settings     import SECRET_KEY
-from user.models     import User
+from user.models     import User, Follow
+from authorization   import Authorize
 from user.validators import (
     validate_email, 
     validate_password, 
@@ -76,3 +77,39 @@ class SigninView(View):
 
         except KeyError:
             return JsonResponse({'MESSAGE':'KEY_ERROR'}, status=400)
+
+class FollowView(View):
+    @Authorize
+    def get(self, request, user_id):
+        try:
+            signed_user = request.user
+            followee = User.objects.get(pk=user_id)
+            
+            if signed_user.id == user_id:
+                return JsonResponse({"MESSAGE":"CAN'T_FOLLOW_SELF"}, status=400)
+
+            if Follow.objects.filter(followee=followee, follower=signed_user).exists():
+                Follow.objects.get(followee=followee, follower=signed_user).delete()
+                return JsonResponse({"MESSAGE":"UNFOLLOWED"}, status=200)
+                
+            Follow.objects.create(
+                followee = followee,
+                follower = signed_user
+            )
+            return JsonResponse({"MESSAGE":"FOLLOWED"}, status=201)
+
+        except ValueError:
+            return JsonResponse({"MESSAGE": "ERROR"}, status=400)
+
+class FollowerView(View):
+    def get(self, request, user_id):
+        try:
+            user = User.objects.get(pk=user_id)
+            user_info = {
+                'nickname' : user.nickname,
+                'followers' : len(Follow.objects.filter(follow_user=user))
+            }
+            return JsonResponse({"MESSAGE":user_info}, status=200)
+
+        except Exception as e:
+            return JsonResponse({"MESSAGE": "ERROR"}, status=400)

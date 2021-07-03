@@ -1,14 +1,15 @@
+from enum import auto
 import json
+from json.decoder import JSONDecodeError
 
 from django.db.utils import IntegrityError
 from django.utils    import timezone
 from django.http     import JsonResponse
 from django.views    import View
 
-from postings.models       import Post, Image, Comment
-from postings.authorization import Authorize
-from user.models           import User
-from likes.models           import Like
+from postings.models import Post, Image, Comment, Like
+from authorization   import Authorize
+from user.models     import User
 
 class WritePostView(View):
     @Authorize
@@ -94,14 +95,36 @@ class PostsView(View):
 
     @Authorize
     def delete(self, request, pk):
-        signed_user = request.user
         try:
-            if Post.objects.filter(pk=pk, author=signed_user):
-                Post.objects.get(pk=pk, author=signed_user).delete()
+            signed_user = request.user
+            post = Post.objects.get(pk=pk)
+
+            if post.author == signed_user:
+                post.delete()
                 return JsonResponse({"MESSAGE":"POST_DELETED"}, status=200)
-            return JsonResponse({"MESSAGE":"YOU_ARE_NOT_AUTHOR"}, status=400)
+            return JsonResponse({"MESSAGE":"PERMISSION_DENIED"}, status=400)
+            
+        except Post.DoesNotExist:
+            return JsonResponse({"MESSAGE":"POST_NOT_EXISTS"}, status=400)
+    
+    @Authorize
+    def patch(self, request, pk):
+        try:
+            data = json.loads(request.body)
+            signed_user = request.user
+            post = Post.objects.get(pk=pk)
+            
+            if post.author == signed_user:
+                post.update(content = data['content'])
+                return JsonResponse({"MESSAGE":"UPDATE_SUCCESS"}, status=200)
+            return JsonResponse({"MESSAGE":"PERMISSION_DENIED"}, status=400)
+
+        except Post.DoesNotExist:
+            return JsonResponse({"MESSAGE":"POST_NOT_EXISTS"}, status=400)
         except:
-            return JsonResponse({"MESSAGE":"SOMETHING_IS_WRONG"}, status=400)
+            return JsonResponse({"MESSAGE":"ERROR"}, status=400)
+            
+
 
 class WriteCommentView(View):
     @Authorize
@@ -153,12 +176,30 @@ class CommentsView(View):
         return JsonResponse({"COMMENTS" : results}, status=200)
     
     @Authorize
-    def delete(self, request, post_pk, comment_pk):
+    def delete(self, request, comment_pk):
         signed_user = request.user
         try:
-            if Comment.objects.filter(pk=comment_pk, user=signed_user):
-                Comment.objects.get(pk=comment_pk, user=signed_user).delete()
+            comment = Comment.objects.get(pk=comment_pk)
+
+            if comment.user == signed_user:
+                comment.delete()
                 return JsonResponse({"MESSAGE":"COMMENT_DELETED"}, status=200)
             return JsonResponse({"MESSAGE":"PERMISSION_DENIED"}, status=400)
-        except:
-            return JsonResponse({"MESSAGE":"SOMETHING_IS_WRONG"}, status=400)
+
+        except Comment.DoesNotExist:
+            return JsonResponse({"MESSAGE":"COMMENT_NOT_EXISTS"}, status=400)
+
+class LikeView(View):
+    @Authorize
+    def get(self, request, postpk):
+        signed_user = request.user
+
+        if Like.objects.filter(user=signed_user, post_id=postpk).exists():
+            Like.objects.get(user=signed_user, post_id=postpk).delete()
+            return JsonResponse({"MESSAGE":"SUCCESS"}, status = 200)
+
+        Like.objects.create(
+            user    = signed_user,
+            post_id = postpk
+        )
+        return JsonResponse({"MESSAGE":"SUCCESS"}, status = 201)
