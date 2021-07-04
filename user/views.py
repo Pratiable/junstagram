@@ -59,8 +59,8 @@ class SigninView(View):
                 ):
                 encoded_jwt = jwt.encode(
                     {
-                        'user_id': user.pk,
-                        'exp'    : timezone.localtime() + timezone.timedelta(days=3)
+                        'user_id' : user.pk,
+                        'exp'     : timezone.localtime() + timezone.timedelta(days=3)
                     }, 
                     SECRET_KEY, 
                     algorithm='HS256'
@@ -83,7 +83,7 @@ class FollowView(View):
     def get(self, request, user_id):
         try:
             signed_user = request.user
-            followee = User.objects.get(pk=user_id)
+            followee    = User.objects.get(pk=user_id)
             
             if signed_user.id == user_id:
                 return JsonResponse({"MESSAGE":"CAN'T_FOLLOW_SELF"}, status=400)
@@ -104,12 +104,12 @@ class FollowView(View):
 class FollowerView(View):
     def get(self, request, user_id):
         try:
-            user = User.objects.get(pk=user_id)
+            user      = User.objects.get(pk=user_id)
             user_info = {
                 'nickname' : user.nickname,
-                'followers' : len(Follow.objects.filter(follow_user=user))
+                'followers': len(Follow.objects.filter(follow_user=user))
             }
             return JsonResponse({"MESSAGE":user_info}, status=200)
 
-        except Exception as e:
+        except:
             return JsonResponse({"MESSAGE": "ERROR"}, status=400)

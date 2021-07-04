@@ -1,6 +1,4 @@
-from enum import auto
 import json
-from json.decoder import JSONDecodeError
 
 from django.db.utils import IntegrityError
 from django.utils    import timezone
@@ -113,7 +111,7 @@ class PostsView(View):
             data = json.loads(request.body)
             signed_user = request.user
             post = Post.objects.get(pk=pk)
-            
+
             if post.author == signed_user:
                 post.update(content = data['content'])
                 return JsonResponse({"MESSAGE":"UPDATE_SUCCESS"}, status=200)
@@ -133,6 +131,9 @@ class WriteCommentView(View):
             data        = json.loads(request.body)
             signed_user = request.user
             post        = Post.objects.get(pk=post_pk)
+            
+            if not data['content']:
+                return JsonResponse({"MESSAGE":"NEED_CONTENTS"}, status=400)
 
             comment = Comment.objects.create(
                 user    = signed_user,
