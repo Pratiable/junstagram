@@ -74,10 +74,10 @@ class PostsView(View):
             'author'    : post.author.nickname,
             'content'   : post.content,
             'created_at': 
-            timezone.localtime(post.created_at).strftime("%Y-%m-%dT%H:%M:%S"),
+            timezone.localtime(post.created_at).strftime("%Y년 %m월 %d일 / %H시 %M분 %S초"),
             'images'    : image_list,
-            'likes'     : len(Like.objects.filter(post_id=pk)),
-            'user_like' : bool(Like.objects.filter(post_id=pk, user=signed_user)),
+            'likes'     : len(Like.objects.filter(posts=post)),
+            'user_like' : bool(Like.objects.filter(posts=post, users=signed_user)),
         }
         for comment in comments:
             comments_list.append(
@@ -90,20 +90,6 @@ class PostsView(View):
             )
 
         return JsonResponse({'Post': post_view, 'Comments': comments_list}, status=200)
-
-    @Authorize
-    def delete(self, request, pk):
-        try:
-            signed_user = request.user
-            post = Post.objects.get(pk=pk)
-
-            if post.author == signed_user:
-                post.delete()
-                return JsonResponse({"MESSAGE":"POST_DELETED"}, status=200)
-            return JsonResponse({"MESSAGE":"PERMISSION_DENIED"}, status=400)
-            
-        except Post.DoesNotExist:
-            return JsonResponse({"MESSAGE":"POST_NOT_EXISTS"}, status=400)
     
     @Authorize
     def patch(self, request, pk):
@@ -121,6 +107,21 @@ class PostsView(View):
             return JsonResponse({"MESSAGE":"POST_NOT_EXISTS"}, status=400)
         except:
             return JsonResponse({"MESSAGE":"ERROR"}, status=400)
+
+class PostDeleteView(View):
+    @Authorize
+    def post(self, request, pk):
+        try:
+            signed_user = request.user
+            post = Post.objects.get(pk=pk)
+
+            if post.author == signed_user:
+                post.delete()
+                return JsonResponse({"MESSAGE":"POST_DELETED"}, status=200)
+            return JsonResponse({"MESSAGE":"PERMISSION_DENIED"}, status=400)
+            
+        except Post.DoesNotExist:
+            return JsonResponse({"MESSAGE":"POST_NOT_EXISTS"}, status=400)
             
 
 
@@ -175,9 +176,10 @@ class CommentsView(View):
                 }
             )
         return JsonResponse({"COMMENTS" : results}, status=200)
-    
+
+class CommentDeleteView(View):
     @Authorize
-    def delete(self, request, comment_pk):
+    def post(self, request, comment_pk):
         signed_user = request.user
         try:
             comment = Comment.objects.get(pk=comment_pk)
